@@ -6,7 +6,6 @@ import urllib.request, urllib.parse, urllib.error
 import json
 import sys
 import time
-import math
 import os.path
 from xml.etree import ElementTree as ET
 
