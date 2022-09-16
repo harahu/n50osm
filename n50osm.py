@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf8
 
-
 import urllib.request, urllib.parse, urllib.error
 import zipfile
 from io import BytesIO, TextIOWrapper
@@ -13,7 +12,6 @@ import time
 import math
 from xml.etree import ElementTree as ET
 import utm
-
 
 version = "0.7.2"
 
@@ -66,7 +64,6 @@ avoid_tags = [  # N50 properties to exclude from output (unless debug)
     "målemetode",
     "nøyaktighet",
 ]
-
 
 osm_tags = {
     # Arealdekke

@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf8
 
-
 import urllib.request, urllib.parse, urllib.error
 import json
 import sys
 import time
 import os.path
 from xml.etree import ElementTree as ET
-
 
 version = "0.1.1"
 
