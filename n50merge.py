@@ -27,13 +27,13 @@ merge_osm_ways = False
 debug = False
 
 
-def message(text):
+def message(text) -> None:
     """Output message to console"""
     sys.stderr.write(text)
     sys.stderr.flush()
 
 
-def timeformat(sec):
+def timeformat(sec) -> str:
     """Format time"""
     if sec > 3600:
         return "%i:%02i:%02i hours" % (sec / 3600, (sec % 3600) / 60, sec % 60)
@@ -88,7 +88,7 @@ def get_municipality_name(query):
             )
 
 
-def prepare_data(root, tree, nodes, ways, relations):
+def prepare_data(root, tree, nodes, ways, relations) -> None:
     """
     Build dict data structure from XML.
     Works for both N50 and OSM.
@@ -166,7 +166,7 @@ def prepare_data(root, tree, nodes, ways, relations):
             }
 
 
-def load_osm():
+def load_osm() -> None:
     """Load relevant OSM elements for chosen municipality"""
     global osm_root, osm_tree
 
@@ -214,7 +214,7 @@ def load_osm():
             message("\t\t%s (%i)\n" % (user[0], user[1]))
 
 
-def load_n50():
+def load_n50() -> None:
     """
     Load N50 import file.
     The file should only contain new elements (negative id's).
@@ -244,7 +244,7 @@ def load_n50():
     message("\tLoaded %i ways, %i relations\n" % (len(n50_ways), len(n50_relations)))
 
 
-def filter_parts(part, n50_elements, found_elements):
+def filter_parts(part, n50_elements, found_elements) -> None:
     """
     Filter elements according to given part (coastline, water, wood, landuse/other).
     Found elements are returned in 'found_elements' parameter (set).
@@ -278,7 +278,7 @@ def filter_parts(part, n50_elements, found_elements):
                     break
 
 
-def split_n50():
+def split_n50() -> None:
     """Split N50 import file into parts (coastline, water, wood, landuse/other)."""
     message("Splitting N50 import file ...\n")
 
@@ -350,7 +350,7 @@ def split_n50():
         )
 
 
-def merge_osm():
+def merge_osm() -> None:
     """
     Identify duplicate ways in existing OSM.
     Note: WIP. It identifies the ways but it does not merge.
@@ -384,7 +384,7 @@ def merge_osm():
     message("\r\tFound %i identical ways\n" % count)
 
 
-def merge_tags(n50_xml, osm_xml):
+def merge_tags(n50_xml, osm_xml) -> bool:
     """
     Merge tags from N50 element into OSM element, if there are no conflicts (e.g. natural=coastline + natural=wood).
     """
@@ -408,7 +408,7 @@ def merge_tags(n50_xml, osm_xml):
     return True
 
 
-def merge_n50():
+def merge_n50() -> None:
     """
     Merge N50 elements with existing OSM elements.
     Identical ways (with identical coordinates) will be merged.
@@ -529,7 +529,7 @@ def merge_n50():
     message("\tRun time %s\n" % (timeformat(time.time() - lap_time)))
 
 
-def indent_tree(elem, level=0):
+def indent_tree(elem, level=0) -> None:
     """Indent XML output"""
     i = "\n" + level * "  "
     if len(elem):
@@ -546,7 +546,7 @@ def indent_tree(elem, level=0):
             elem.tail = i
 
 
-def save_osm():
+def save_osm() -> None:
     """Output merged N50/OSM tree to file"""
     message("Saving file ...\n")
 

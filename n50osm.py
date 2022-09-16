@@ -268,13 +268,13 @@ def tag_object(feature_type, geometry_type, properties, feature):
     return (tags, missing_tags)
 
 
-def message(output_text):
+def message(output_text) -> None:
     """Output message"""
     sys.stdout.write(output_text)
     sys.stdout.flush()
 
 
-def timeformat(sec):
+def timeformat(sec) -> str:
     """Format time"""
     if sec > 3600:
         return "%i:%02i:%02i hours" % (sec / 3600, (sec % 3600) / 60, sec % 60)
@@ -445,7 +445,7 @@ def get_bbox(coordinates, perimeter):
     return [min_node, max_node]
 
 
-def create_point(node, gml_id, note):
+def create_point(node, gml_id, note) -> None:
     """Create feature with one point"""
     if debug:
         entry = {
@@ -559,7 +559,7 @@ def get_municipality_name(query):
             )
 
 
-def load_building_types():
+def load_building_types() -> None:
     """
     Load conversion CSV table for tagging building types
     Format in CSV: "key=value + key=value + ..."
@@ -638,7 +638,7 @@ def get_property(top, ns_app):
     return properties
 
 
-def load_n50_data(municipality_id, municipality_name, data_category):
+def load_n50_data(municipality_id, municipality_name, data_category) -> None:
     """Load N50 topo data from Kartverket"""
     global gml_id
 
@@ -880,7 +880,7 @@ def load_n50_data(municipality_id, municipality_name, data_category):
     message("\tRun time %s\n" % (timeformat(time.time() - lap)))
 
 
-def create_border_segments(patch, members, gml_id, match):
+def create_border_segments(patch, members, gml_id, match) -> None:
     """Create missing KantUtsnitt segments to get complete polygons"""
     # First create list of existing conncetions between coordinates i and i+1 of patch
 
@@ -941,7 +941,7 @@ def segment_position(segment_index, patch):
     return patch.index(segments[segment_index]["coordinates"][1])
 
 
-def split_polygons():
+def split_polygons() -> None:
     """
     Fix data structure:
     - Split polygons into segments
@@ -1063,7 +1063,7 @@ def split_polygons():
     message("\tRun time %s\n" % (timeformat(time.time() - lap)))
 
 
-def find_islands():
+def find_islands() -> None:
     """Fix coastline"""
     message("Find islands...\n")
 
@@ -1300,7 +1300,7 @@ def find_islands():
     message("\tRun time %s\n" % (timeformat(time.time() - lap)))
 
 
-def match_nodes():
+def match_nodes() -> None:
     """Identify common intersection nodes between lines (e.g. streams)"""
     global delete_count
 
@@ -1529,7 +1529,7 @@ def get_elevation(node):
     return ele
 
 
-def fix_stream_direction():
+def fix_stream_direction() -> None:
     """Turn streams which have uphill direction"""
     global elevations, ele_count, retry_count
 
@@ -1704,14 +1704,14 @@ def get_ssr_name(feature, name_categories):
         return None
 
 
-def get_category_place_names(n50_categories, ssr_categories):
+def get_category_place_names(n50_categories, ssr_categories) -> None:
     """Get place names for a category"""
     for feature in features:
         if feature["object"] in n50_categories:
             get_ssr_name(feature, ssr_categories)
 
 
-def get_place_names():
+def get_place_names() -> None:
     """
     Get place names for islands, glaciers etc.
     Place name categories: https://github.com/osmno/geocode2osm/blob/master/navnetyper.json
@@ -1870,7 +1870,7 @@ def get_place_names():
     message("\tRun time %s\n" % (timeformat(time.time() - lap)))
 
 
-def get_nve_lakes():
+def get_nve_lakes() -> None:
     """
     Get name from NVE Innsjødatabasen
     API reference: https://gis3.nve.no/map/rest/services/Innsjodatabase2/MapServer
@@ -1947,7 +1947,7 @@ def get_nve_lakes():
     )
 
 
-def save_geojson(filename):
+def save_geojson(filename) -> None:
     """Save geojson file for reviewing raw input data from GML file"""
     message("Save to '%s' file...\n" % filename)
 
@@ -1977,7 +1977,7 @@ def save_geojson(filename):
     message("\t%i features saved\n" % len(features))
 
 
-def indent_tree(elem, level=0):
+def indent_tree(elem, level=0) -> None:
     """Indent XML output"""
     i = "\n" + level * "  "
     if len(elem):
@@ -1994,7 +1994,7 @@ def indent_tree(elem, level=0):
             elem.tail = i
 
 
-def save_osm(filename):
+def save_osm(filename) -> None:
     """Save osm file"""
     message("Save to '%s' file...\n" % filename)
 
