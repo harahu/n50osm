@@ -142,10 +142,8 @@ osm_tags = {
 }
 
 
-# OSM tagging; first special cases
-
-
 def tag_object(feature_type, geometry_type, properties, feature):
+    """OSM tagging; first special cases"""
     tags = {}
     missing_tags = set()
 
@@ -271,18 +269,14 @@ def tag_object(feature_type, geometry_type, properties, feature):
     return (tags, missing_tags)
 
 
-# Output message
-
-
 def message(output_text):
+    """Output message"""
     sys.stdout.write(output_text)
     sys.stdout.flush()
 
 
-# Format time
-
-
 def timeformat(sec):
+    """Format time"""
     if sec > 3600:
         return "%i:%02i:%02i hours" % (sec / 3600, (sec % 3600) / 60, sec % 60)
     elif sec > 60:
@@ -291,14 +285,14 @@ def timeformat(sec):
         return "%i seconds" % sec
 
 
-# Calculate coordinate area of polygon in square meters
-# Simple conversion to planar projection, works for small areas
-# < 0: Clockwise
-# > 0: Counter-clockwise
-# = 0: Polygon not closed
-
-
 def polygon_area(polygon):
+    """
+    Calculate coordinate area of polygon in square meters
+    Simple conversion to planar projection, works for small areas
+    < 0: Clockwise
+    > 0: Counter-clockwise
+    = 0: Polygon not closed
+    """
     if polygon[0] == polygon[-1]:
         lat_dist = math.pi * 6371009.0 / 180.0
 
@@ -319,10 +313,8 @@ def polygon_area(polygon):
         return 0
 
 
-# Calculate coordinate area of multipolygon, i.e. excluding inner polygons
-
-
 def multipolygon_area(multipolygon):
+    """Calculate coordinate area of multipolygon, i.e. excluding inner polygons"""
     if (
         type(multipolygon) is list
         and len(multipolygon) > 0
@@ -342,11 +334,11 @@ def multipolygon_area(multipolygon):
         return None
 
 
-# Calculate centroid of polygon
-# Source: https://en.wikipedia.org/wiki/Centroid#Of_a_polygon
-
-
 def polygon_centroid(polygon):
+    """
+    Calculate centroid of polygon
+    Source: https://en.wikipedia.org/wiki/Centroid#Of_a_polygon
+    """
     if polygon[0] == polygon[-1]:
         x = 0
         y = 0
@@ -364,11 +356,11 @@ def polygon_centroid(polygon):
         return None
 
 
-# Tests whether point (x,y) is inside a polygon
-# Ray tracing method
-
-
 def inside_polygon(point, polygon):
+    """
+    Tests whether point (x,y) is inside a polygon
+    Ray tracing method
+    """
     if polygon[0] == polygon[-1]:
         x, y = point
         n = len(polygon)
@@ -392,10 +384,9 @@ def inside_polygon(point, polygon):
         return None
 
 
-# Test whether point (x,y) is inside a multipolygon, i.e. not inside inner polygons
-
-
 def inside_multipolygon(point, multipolygon):
+    """Test whether point (x,y) is inside a multipolygon, i.e. not inside inner polygons
+    """
     if (
         type(multipolygon) is list
         and len(multipolygon) > 0
@@ -415,11 +406,11 @@ def inside_multipolygon(point, multipolygon):
         return None
 
 
-# Calculate new node with given distance offset in meters
-# Works over short distances
-
-
 def coordinate_offset(node, distance):
+    """
+    Calculate new node with given distance offset in meters
+    Works over short distances
+    """
     m = 1 / ((math.pi / 180.0) * 6378137.0)  # Degrees per meter
 
     latitude = node[1] + (distance * m)
@@ -428,11 +419,11 @@ def coordinate_offset(node, distance):
     return (longitude, latitude)
 
 
-# Identify bounds of line coordinates
-# Returns lower left and upper right corners of square bounds + extra perimeter (in meters)
-
-
 def get_bbox(coordinates, perimeter):
+    """
+    Identify bounds of line coordinates
+    Returns lower left and upper right corners of square bounds + extra perimeter (in meters)
+    """
     if type(coordinates) is tuple:
         patch = [coordinates]
     elif type(coordinates[0]) is tuple:
@@ -455,10 +446,8 @@ def get_bbox(coordinates, perimeter):
     return [min_node, max_node]
 
 
-# Create feature with one point
-
-
 def create_point(node, gml_id, note):
+    """Create feature with one point"""
     if debug:
         entry = {
             "object": "Debug",
@@ -474,11 +463,11 @@ def create_point(node, gml_id, note):
         features.append(entry)
 
 
-# Get list of coordinates from GML
-# Each point is a tuple of (lon, lat), corresponding to GeoJSON format x,y
-
-
 def parse_coordinates(coord_text):
+    """
+    Get list of coordinates from GML
+    Each point is a tuple of (lon, lat), corresponding to GeoJSON format x,y
+    """
     global gml_id
 
     parse_count = 0
@@ -526,10 +515,8 @@ def parse_coordinates(coord_text):
     return coordinates
 
 
-# Get name or id of municipality from GeoNorge api
-
-
 def get_municipality_name(query):
+    """Get name or id of municipality from GeoNorge api"""
     if query.isdigit():
         url = "https://ws.geonorge.no/kommuneinfo/v1/kommuner/" + query
     else:
@@ -573,11 +560,11 @@ def get_municipality_name(query):
             )
 
 
-# Load conversion CSV table for tagging building types
-# Format in CSV: "key=value + key=value + ..."
-
-
 def load_building_types():
+    """
+    Load conversion CSV table for tagging building types
+    Format in CSV: "key=value + key=value + ..."
+    """
     # 	file = open("building_types.csv")
     url = "https://raw.githubusercontent.com/NKAmapper/building2osm/main/building_types.csv"
     request = urllib.request.Request(url, headers=header)
@@ -606,10 +593,8 @@ def load_building_types():
     file.close()
 
 
-# Compute length based on coordinates (not in meters)
-
-
 def simple_length(coord):
+    """Compute length based on coordinates (not in meters)"""
     length = 0
     for i in range(len(coord) - 2):
         length += (coord[i + 1][0] - coord[i][0]) ** 2 + (
@@ -619,10 +604,8 @@ def simple_length(coord):
     return length
 
 
-# Split patch if self-intersecting or touching polygon
-
-
 def split_patch(coordinates):
+    """Split patch if self-intersecting or touching polygon"""
     for i in range(1, len(coordinates) - 1):
         first = coordinates.index(coordinates[i])
         if first < i:
@@ -640,10 +623,8 @@ def split_patch(coordinates):
     return [coordinates]
 
 
-# Get all app properties from nested XML; recursive search
-
-
 def get_property(top, ns_app):
+    """Get all app properties from nested XML; recursive search"""
     properties = {}
     if ns_app in top.tag:
         tag = top.tag[len(ns_app) + 2 :]
@@ -658,10 +639,8 @@ def get_property(top, ns_app):
     return properties
 
 
-# Load N50 topo data from Kartverket
-
-
 def load_n50_data(municipality_id, municipality_name, data_category):
+    """Load N50 topo data from Kartverket"""
     global gml_id
 
     lap = time.time()
@@ -902,10 +881,8 @@ def load_n50_data(municipality_id, municipality_name, data_category):
     message("\tRun time %s\n" % (timeformat(time.time() - lap)))
 
 
-# Create missing KantUtsnitt segments to get complete polygons
-
-
 def create_border_segments(patch, members, gml_id, match):
+    """Create missing KantUtsnitt segments to get complete polygons"""
     # First create list of existing conncetions between coordinates i and i+1 of patch
 
     connection = []
@@ -957,22 +934,22 @@ def create_border_segments(patch, members, gml_id, match):
             start_index = end_index
 
 
-# Function for sorting member segments of polygon relation
-# Index 1 used to avoid equal 0/-1 positions
-
-
 def segment_position(segment_index, patch):
+    """
+    Function for sorting member segments of polygon relation
+    Index 1 used to avoid equal 0/-1 positions
+    """
     return patch.index(segments[segment_index]["coordinates"][1])
 
 
-# Fix data structure:
-# - Split polygons into segments
-# - Order direction of ways for coastline, lakes, rivers and islands
-# - Order members of multipolygons
-# - Crate missing segments along municipality border
-
-
 def split_polygons():
+    """
+    Fix data structure:
+    - Split polygons into segments
+    - Order direction of ways for coastline, lakes, rivers and islands
+    - Order members of multipolygons
+    - Crate missing segments along municipality border
+    """
     message("Decompose polygons into segments...\n")
 
     # Create bbox for segments and line features
@@ -1087,10 +1064,8 @@ def split_polygons():
     message("\tRun time %s\n" % (timeformat(time.time() - lap)))
 
 
-# Fix coastline
-
-
 def find_islands():
+    """Fix coastline"""
     message("Find islands...\n")
 
     lap = time.time()
@@ -1326,10 +1301,8 @@ def find_islands():
     message("\tRun time %s\n" % (timeformat(time.time() - lap)))
 
 
-# Identify common intersection nodes between lines (e.g. streams)
-
-
 def match_nodes():
+    """Identify common intersection nodes between lines (e.g. streams)"""
     global delete_count
 
     message("Identify intersections...\n")
@@ -1445,14 +1418,14 @@ def match_nodes():
     message("\tRun time %s\n" % (timeformat(time.time() - lap)))
 
 
-# OLD:
-# Get elevation for a given node/coordinate
-# API reference: https://kartverket.no/api-og-data/friluftsliv/hoydeprofil
-# 	and: https://wms.geonorge.no/skwms1/wps.elevation2?request=DescribeProcess&service=WPS&version=1.0.0&identifier=elevation
-# Note: Slow api (approx 1.4 calls/second), to be replaced by Kartverket end of 2020
-
-
 def get_elevation_old(node):
+    """
+    OLD:
+    Get elevation for a given node/coordinate
+    API reference: https://kartverket.no/api-og-data/friluftsliv/hoydeprofil
+        and: https://wms.geonorge.no/skwms1/wps.elevation2?request=DescribeProcess&service=WPS&version=1.0.0&identifier=elevation
+    Note: Slow api (approx 1.4 calls/second), to be replaced by Kartverket end of 2020
+    """
     global elevations, ele_count, retry_count
 
     ns_ows = "http://www.opengis.net/ows/1.1"
@@ -1519,13 +1492,13 @@ def get_elevation_old(node):
     return ele
 
 
-# NEW:
-# Get elevation for a given node/coordinate
-# Note: Still testing this api
-# Note: Slow api, approx 4 calls / second
-
-
 def get_elevation(node):
+    """
+    NEW:
+    Get elevation for a given node/coordinate
+    Note: Still testing this api
+    Note: Slow api, approx 4 calls / second
+    """
     global elevations, ele_count, retry_count
 
     url = (
@@ -1557,10 +1530,8 @@ def get_elevation(node):
     return ele
 
 
-# Turn streams which have uphill direction
-
-
 def fix_stream_direction():
+    """Turn streams which have uphill direction"""
     global elevations, ele_count, retry_count
 
     elevations = {}  # Already fetched elevations from api
@@ -1626,10 +1597,8 @@ def fix_stream_direction():
     )
 
 
-# Load place names from SSR within given bbox
-
-
 def get_ssr_name(feature, name_categories):
+    """Load place names from SSR within given bbox"""
     global ssr_places, name_count
 
     if feature["type"] == "Point":
@@ -1736,20 +1705,18 @@ def get_ssr_name(feature, name_categories):
         return None
 
 
-# Get place names for a category
-
-
 def get_category_place_names(n50_categories, ssr_categories):
+    """Get place names for a category"""
     for feature in features:
         if feature["object"] in n50_categories:
             get_ssr_name(feature, ssr_categories)
 
 
-# Get place names for islands, glaciers etc.
-# Place name categories: https://github.com/osmno/geocode2osm/blob/master/navnetyper.json
-
-
 def get_place_names():
+    """
+    Get place names for islands, glaciers etc.
+    Place name categories: https://github.com/osmno/geocode2osm/blob/master/navnetyper.json
+    """
     global ssr_places, name_count
     global elevations, ele_count, retry_count
 
@@ -1904,11 +1871,11 @@ def get_place_names():
     message("\tRun time %s\n" % (timeformat(time.time() - lap)))
 
 
-# Get name from NVE Innsjødatabasen
-# API reference: https://gis3.nve.no/map/rest/services/Innsjodatabase2/MapServer
-
-
 def get_nve_lakes():
+    """
+    Get name from NVE Innsjødatabasen
+    API reference: https://gis3.nve.no/map/rest/services/Innsjodatabase2/MapServer
+    """
     message("Load lake data from NVE...\n")
 
     n50_lake_count = 0
@@ -1981,10 +1948,8 @@ def get_nve_lakes():
     )
 
 
-# Save geojson file for reviewing raw input data from GML file
-
-
 def save_geojson(filename):
+    """Save geojson file for reviewing raw input data from GML file"""
     message("Save to '%s' file...\n" % filename)
 
     json_features = {"type": "FeatureCollection", "features": []}
@@ -2013,10 +1978,8 @@ def save_geojson(filename):
     message("\t%i features saved\n" % len(features))
 
 
-# Indent XML output
-
-
 def indent_tree(elem, level=0):
+    """Indent XML output"""
     i = "\n" + level * "  "
     if len(elem):
         if not elem.text or not elem.text.strip():
@@ -2032,10 +1995,8 @@ def indent_tree(elem, level=0):
             elem.tail = i
 
 
-# Save osm file
-
-
 def save_osm(filename):
+    """Save osm file"""
     message("Save to '%s' file...\n" % filename)
 
     osm_node_ids = {}  # Will contain osm_id of each common node
@@ -2193,9 +2154,8 @@ def save_osm(filename):
     )
 
 
-# Main program
-
 if __name__ == "__main__":
+    """Main program"""
     start_time = time.time()
     message("\n-- n50osm v%s --\n" % version)
 
