@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf8
 
 import urllib.request, urllib.parse, urllib.error
 import zipfile
@@ -651,7 +650,7 @@ def load_n50_data(municipality_id, municipality_name, data_category):
 
     # Load latest N50 file for municipality from Kartverket
 
-    filename = "Basisdata_%s_%s_25833_N50Kartdata_GML" % (
+    filename = "Basisdata_{}_{}_25833_N50Kartdata_GML".format(
         municipality_id,
         municipality_name,
     )
@@ -872,8 +871,8 @@ def load_n50_data(municipality_id, municipality_name, data_category):
     if stream_count > 0:
         message("\t%i streams\n" % stream_count)
 
-    message("\tSource dates: %s - %s\n" % (source_date[0], source_date[1]))
-    message("\tUpdate dates: %s - %s\n" % (update_date[0], update_date[1]))
+    message(f"\tSource dates: {source_date[0]} - {source_date[1]}\n")
+    message(f"\tUpdate dates: {update_date[0]} - {update_date[1]}\n")
     message("\t%i feature objects, %i segments\n" % (len(features), len(segments)))
     message("\tRun time %s\n" % (timeformat(time.time() - lap)))
 
@@ -1432,7 +1431,7 @@ def get_elevation_old(node):
 
     url = (
         "https://wms.geonorge.no/skwms1/wps.elevation2?request=Execute&service=WPS&version=1.0.0&identifier=elevation"
-        + "&datainputs=lat=%f;lon=%f;epsg=4326" % (node[1], node[0])
+        + f"&datainputs=lat={node[1]:f};lon={node[0]:f};epsg=4326"
     )
 
     if node in elevations:
@@ -1464,8 +1463,8 @@ def get_elevation_old(node):
                 else:
                     exception_code = ""
 
-                message("\tHTTP Error %s: %s  " % (e.code, e.reason))
-                message("\tException: [%s] %s\n" % (exception_code, exception_text))
+                message(f"\tHTTP Error {e.code}: {e.reason}  ")
+                message(f"\tException: [{exception_code}] {exception_text}\n")
                 return None
 
     tree = ET.parse(file)
@@ -1729,7 +1728,7 @@ def get_place_names():
 
     # Load all SSR place names in municipality
 
-    url = "https://obtitus.github.io/ssr2_to_osm_data/data/%s/%s.osm" % (
+    url = "https://obtitus.github.io/ssr2_to_osm_data/data/{}/{}.osm".format(
         municipality_id,
         municipality_id,
     )
@@ -2191,7 +2190,7 @@ if __name__ == "__main__":
     if municipality_id is None:
         sys.exit("Municipality '%s' not found\n" % municipality_query)
     else:
-        message("Municipality:\t%s %s\n" % (municipality_id, municipality_name))
+        message(f"Municipality:\t{municipality_id} {municipality_name}\n")
 
     # Get N50 data category
 
@@ -2226,7 +2225,7 @@ if __name__ == "__main__":
     if not turn_stream or not lake_ele:
         message("*** Remember -stream and -ele options before importing.\n")
 
-    output_filename = "n50_%s_%s_%s" % (
+    output_filename = "n50_{}_{}_{}".format(
         municipality_id,
         municipality_name.replace(" ", "_"),
         data_category,

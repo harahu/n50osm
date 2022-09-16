@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf8
 
 import urllib.request, urllib.parse, urllib.error
 import json
@@ -599,20 +598,20 @@ if __name__ == "__main__":
     if municipality_id is None:
         sys.exit("Municipality '%s' not found\n" % municipality_query)
     else:
-        message("Municipality: %s %s\n" % (municipality_id, municipality_name))
+        message(f"Municipality: {municipality_id} {municipality_name}\n")
 
     # Determine filename and check if file exists
 
     if len(sys.argv) > 2 and ".osm" in sys.argv[2]:
         filename = sys.argv[2]
     elif len(sys.argv) > 2 and sys.argv[2] in n50_parts:
-        filename = "n50_%s_%s_Arealdekke_%s.osm" % (
+        filename = "n50_{}_{}_Arealdekke_{}.osm".format(
             municipality_id,
             municipality_name,
             sys.argv[2],
         )
     else:
-        filename = "n50_%s_%s_Arealdekke.osm" % (municipality_id, municipality_name)
+        filename = f"n50_{municipality_id}_{municipality_name}_Arealdekke.osm"
 
     if os.path.isfile(filename) or os.path.isfile(
         os.path.expanduser(import_folder + filename)
@@ -621,7 +620,7 @@ if __name__ == "__main__":
         output_filename = filename.replace(".osm", "") + "_merged.osm"
     elif "-osm" in sys.argv:
         filename = ""
-        output_filename = "n50_%s_%s_merged.osm" % (
+        output_filename = "n50_{}_{}_merged.osm".format(
             municipality_id,
             municipality_name.replace(" ", "_"),
         )
