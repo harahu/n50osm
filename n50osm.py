@@ -113,7 +113,7 @@ osm_tags = {
     "Campingplass": {"tourism": "camp_site"},
     "Dam": {"waterway": "dam"},
     "Flytebrygge": {"man_made": "pier", "floating": "yes"},
-    "Gruve": {"man_made": "adit"},  # Could be shaft
+    "Gruve": {"man_made": "adit"},  # Could also be "shaft"
     "Hoppbakke": {"piste:type": "ski_jump"},
     "KaiBrygge": {"man_made": "quay"},
     "Ledning": {"power": "line"},
@@ -158,7 +158,7 @@ def tag_object(feature_type, geometry_type, properties, feature):
 
     elif (
         feature_type == "Skytefelt" and data_category == "Restriksjonsomrader"
-    ):  # Eception to Arealdekke
+    ):  # Exception to Arealdekke
         tags["landuse"] = "military"
 
     elif feature_type == "Bygning":
@@ -781,13 +781,13 @@ def load_n50_data(municipality_id, municipality_name, data_category) -> None:
                             if len(coordinates) > 1:
                                 if len(coordinates) < 3:
                                     message(
-                                        "\t*** POLYGON PATCH TOO SHORT: %s  %s\n"
-                                        % (role, gml_id)
+                                        f"\t*** POLYGON PATCH TOO SHORT: {role} "
+                                        f" {gml_id}\n"
                                     )
                                 elif coordinates[0] != coordinates[-1]:
                                     message(
-                                        "\t*** POLYGON PATCH NOT CLOSED: %s  %s\n"
-                                        % (role, gml_id)
+                                        f"\t*** POLYGON PATCH NOT CLOSED: {role} "
+                                        f" {gml_id}\n"
                                     )
 
                                 if json_output:
@@ -799,12 +799,11 @@ def load_n50_data(municipality_id, municipality_name, data_category) -> None:
                                     )
                             else:
                                 message(
-                                    "\t*** EMPTY POLYGON PATCH: %s  %s\n"
-                                    % (role, gml_id)
+                                    f"\t*** EMPTY POLYGON PATCH: {role}  {gml_id}\n"
                                 )
 
                     elif ns_gml in geo.tag:
-                        message("\t*** UNKNOWN GEOMETRY: %s\n" % geo.tag)
+                        message(f"\t*** UNKNOWN GEOMETRY: {geo.tag}\n")
 
             # Store tags
 
@@ -2156,7 +2155,7 @@ def save_osm(filename) -> None:
 if __name__ == "__main__":
     """Main program"""
     start_time = time.time()
-    message("\n-- n50osm v%s --\n" % version)
+    message(f"\n-- n50osm v{version} --\n")
 
     features = []  # All geometry and tags
     segments = []  # Line segments which are shared by one or more polygons
@@ -2179,7 +2178,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) < 3:
         message("Please provide 1) municipality, and 2) data category parameter.\n")
-        message("Data categories: %s\n" % ", ".join(data_categories))
+        message(f"Data categories: {', '.join(data_categories)}\n")
         message(
             "Options: -debug, -tag, -geojson, -stream, -ele, -noname, -nonve,"
             " -nonode\n\n"
@@ -2191,7 +2190,7 @@ if __name__ == "__main__":
     municipality_query = sys.argv[1]
     [municipality_id, municipality_name] = get_municipality_name(municipality_query)
     if municipality_id is None:
-        sys.exit("Municipality '%s' not found\n" % municipality_query)
+        sys.exit(f"Municipality '{municipality_query}' not found\n")
     else:
         message(f"Municipality:\t{municipality_id} {municipality_name}\n")
 
@@ -2201,10 +2200,10 @@ if __name__ == "__main__":
     for category in data_categories:
         if sys.argv[2].lower() in category.lower():
             data_category = category
-            message("N50 category:\t%s\n" % data_category)
+            message(f"N50 category:\t{data_category}\n")
             break
     if not data_category:
-        sys.exit("Please provide data category: %s\n" % ", ".join(data_categories))
+        sys.exit(f"Please provide data category: {', '.join(data_categories)}\n")
 
     # Get other options
 
@@ -2228,10 +2227,8 @@ if __name__ == "__main__":
     if not turn_stream or not lake_ele:
         message("*** Remember -stream and -ele options before importing.\n")
 
-    output_filename = "n50_{}_{}_{}".format(
-        municipality_id,
-        municipality_name.replace(" ", "_"),
-        data_category,
+    output_filename = (
+        f"n50_{municipality_id}_{municipality_name.replace(' ', '_')}_{data_category}"
     )
 
     # Process data
@@ -2242,7 +2239,7 @@ if __name__ == "__main__":
     load_n50_data(municipality_id, municipality_name, data_category)
 
     if json_output:
-        save_geojson(output_filename + ".geojson")
+        save_geojson(f"{output_filename}.geojson")
     else:
         split_polygons()
         if data_category == "Arealdekke":
@@ -2258,6 +2255,7 @@ if __name__ == "__main__":
 
     duration = time.time() - start_time
     message(
-        "\tTotal run time %s (%i features per second)\n\n"
-        % (timeformat(duration), int(len(features) / duration))
+        "\tTotal run time"
+        f" {timeformat(duration)} ({int(len(features) / duration)} features per"
+        " second)\n\n"
     )
