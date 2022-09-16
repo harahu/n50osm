@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 
-import urllib.request, urllib.parse, urllib.error
-import zipfile
-from io import BytesIO, TextIOWrapper
-import json
-import csv
 import copy
+import csv
+import json
+import math
 import sys
 import time
-import math
+import urllib.error
+import urllib.parse
+import urllib.request
+import zipfile
+from io import BytesIO, TextIOWrapper
 from xml.etree import ElementTree as ET
+
 import utm
 
 version = "0.7.2"

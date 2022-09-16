@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
-import urllib.request, urllib.parse, urllib.error
 import json
+import os.path
 import sys
 import time
-import os.path
+import urllib.error
+import urllib.parse
+import urllib.request
 from xml.etree import ElementTree as ET
 
 version = "0.1.1"
