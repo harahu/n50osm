@@ -9,16 +9,38 @@ authors = [
 license = "CC0-1.0"
 readme = "README.md"
 
+packages = [
+    { include = "n50" },
+]
+
 [tool.poetry.dependencies]
-python = "^3.7"
-click = "^8.1.3"
+python = ">=3.7,<3.12"
+cleo = "^1.0.0a5"
+pex = "^2.1.104"
 
 [tool.poetry.group.dev.dependencies]
+fixit = "^0.1.4"
 black = "^22.8.0"
 isort = "^5.10.1"
 mypy = "^0.971"
 flake8-bugbear = "^22.9.11"
+pyanalyze = "^0.7.0"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+
+[tool.isort]
+py_version = 37
+profile = "black"
+force_single_line = true
+combine_as_imports = true
+lines_between_types = 1
+lines_after_imports = 2
+src_paths = ["n50", "tests"]
+
+
+[tool.black]
+target-version = ['py37']
+preview = true
