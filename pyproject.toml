@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "n50osm"
+version = "0.8.0"
+description = "Tools for extracting N50 topo data from Kartverket and for merging it with existing OSM data."
+authors = [
+    "NKA <nkamapper@gmail.com>",
+    "Harald Husum <harald.husum@gmail.com>",
+]
+license = "CC0-1.0"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.7"
+
+[tool.poetry.group.dev.dependencies]
+black = "^22.8.0"
+isort = "^5.10.1"
+mypy = "^0.971"
+flake8-bugbear = "^22.9.11"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
