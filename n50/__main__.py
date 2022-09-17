@@ -22,14 +22,14 @@ class OsmCommand(Command):
     """
 
     def handle(self) -> None:
-        municipality: str = self.argument('municipality')
+        municipality: str = self.argument("municipality")
 
         if municipality:
-            text = 'Municipality {}'.format(name)
+            text = "Municipality {}".format(name)
         else:
-            text = 'Hello'
+            text = "Hello"
 
-        if self.option('debug'):
+        if self.option("debug"):
             text = text.upper()
 
         self.line(text)
@@ -46,14 +46,14 @@ class MergeCommand(Command):
     """
 
     def handle(self):
-        municipality = self.argument('municipality')
+        municipality = self.argument("municipality")
 
         if municipality:
-            text = 'Hello {}'.format(name)
+            text = "Hello {}".format(name)
         else:
-            text = 'Hello'
+            text = "Hello"
 
-        if self.option('debug'):
+        if self.option("debug"):
             text = text.upper()
 
         self.line(text)
