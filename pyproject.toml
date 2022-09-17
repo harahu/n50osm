@@ -26,6 +26,9 @@ mypy = "^0.971"
 flake8-bugbear = "^22.9.11"
 pyanalyze = "^0.7.0"
 
+[tool.poetry.scripts]
+n50 = 'n50.__main__:main'
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
