@@ -11,6 +11,7 @@ import urllib.parse
 import urllib.request
 import zipfile
 from io import BytesIO, TextIOWrapper
+from typing import Final
 from xml.etree import ElementTree as ET
 
 import utm
@@ -25,7 +26,7 @@ island_size = 100000  # Minimum square meters for place=island vs place=islet
 
 lake_ele_size = 2000  # Minimum square meters for fetching elevation
 
-data_categories = [
+DATA_CATEGORIES: Final = (
     "AdministrativeOmrader",
     "Arealdekke",
     "BygningerOgAnlegg",
@@ -33,7 +34,7 @@ data_categories = [
     "Restriksjonsomrader",
     "Samferdsel",
     "Stedsnavn",
-]
+)
 
 avoid_objects = [  # Object types to exclude from output
     "ÅpentOmråde",
@@ -512,51 +513,6 @@ def parse_coordinates(coord_text):
         message("\t*** SHORT WAY %s\n" % gml_id)
 
     return coordinates
-
-
-def get_municipality_name(query):
-    """Get name or id of municipality from GeoNorge api"""
-    if query.isdigit():
-        url = "https://ws.geonorge.no/kommuneinfo/v1/kommuner/" + query
-    else:
-        url = "https://ws.geonorge.no/kommuneinfo/v1/sok?knavn=" + urllib.parse.quote(
-            query
-        )
-
-    request = urllib.request.Request(url, headers=header)
-
-    try:
-        file = urllib.request.urlopen(request)
-    except urllib.error.HTTPError as e:
-        if e.code == 404:  # Not found
-            sys.exit("\tMunicipality '%s' not found\n\n" % query)
-        else:
-            raise
-
-    if query.isdigit():
-        result = json.load(file)
-        file.close()
-        municipality_name = result["kommunenavnNorsk"]
-        return (query, municipality_name)
-
-    else:
-        result = json.load(file)
-        file.close()
-        if result["antallTreff"] == 1:
-            municipality_id = result["kommuner"][0]["kommunenummer"]
-            municipality_name = result["kommuner"][0]["kommunenavnNorsk"]
-            return (municipality_id, municipality_name)
-        else:
-            municipalities = []
-            for municipality in result["kommuner"]:
-                municipalities.append(
-                    municipality["kommunenummer"]
-                    + " "
-                    + municipalities["kommunenavnNorsk"]
-                )
-            sys.exit(
-                "\tMore than one municipality found: %s\n\n" % ", ".join(municipalities)
-            )
 
 
 def load_building_types() -> None:
@@ -2152,10 +2108,9 @@ def save_osm(filename) -> None:
     )
 
 
-if __name__ == "__main__":
+def generate_osm(municipality: Municipality):
     """Main program"""
     start_time = time.time()
-    message(f"\n-- n50osm v{version} --\n")
 
     features = []  # All geometry and tags
     segments = []  # Line segments which are shared by one or more polygons
@@ -2174,36 +2129,27 @@ if __name__ == "__main__":
     no_nve = False  # Do not load NVE lake data
     no_node = False  # Do not merge common nodes at intersections
 
-    # Parse parameters
 
-    if len(sys.argv) < 3:
-        message("Please provide 1) municipality, and 2) data category parameter.\n")
-        message(f"Data categories: {', '.join(data_categories)}\n")
-        message(
-            "Options: -debug, -tag, -geojson, -stream, -ele, -noname, -nonve,"
-            " -nonode\n\n"
-        )
-        sys.exit()
-
-    # Get municipality
-
-    municipality_query = sys.argv[1]
+def generate_main(municipality_query: str):
     [municipality_id, municipality_name] = get_municipality_name(municipality_query)
     if municipality_id is None:
         sys.exit(f"Municipality '{municipality_query}' not found\n")
     else:
         message(f"Municipality:\t{municipality_id} {municipality_name}\n")
 
-    # Get N50 data category
-
     data_category = None
-    for category in data_categories:
+    for category in DATA_CATEGORIES:
         if sys.argv[2].lower() in category.lower():
             data_category = category
             message(f"N50 category:\t{data_category}\n")
             break
     if not data_category:
-        sys.exit(f"Please provide data category: {', '.join(data_categories)}\n")
+        sys.exit(f"Please provide data category: {', '.join(DATA_CATEGORIES)}\n")
+
+    return generate_osm()
+
+
+if __name__ == "__main__":
 
     # Get other options
 

@@ -18,6 +18,8 @@ python = ">=3.7,<3.12"
 cleo = "^1.0.0a5"
 pex = "^2.1.104"
 invoke = "^1.7.1"
+requests = "^2.28.1"
+returns = "^0.19.0"
 
 [tool.poetry.group.dev.dependencies]
 fixit = "^0.1.4"
