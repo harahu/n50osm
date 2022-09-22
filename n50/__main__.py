@@ -1,16 +1,22 @@
+#!/usr/bin/env python3
+
 import sys
 
 from cleo.application import Application
 from cleo.commands.command import Command
+from returns.io import IOFailure
+from returns.io import IOSuccess
+from returns.unsafe import unsafe_perform_io
 
-from n50.osm import DATA_CATEGORIES
+from n50.exceptions import N50Error
+from n50.generate import generate_main
 
 
-class OsmCommand(Command):
+class GenerateCommand(Command):
     """
-    Extracts N50 topo data from Kartverket and creates an OSM file
+    Extracts N50 topo data from Kartverket and generates an OSM file
 
-    osm
+    generate
         {municipality : Name of municipality or 4 digit municipality number}
         {category : Data category}
         {--d|debug : Include extra tags and lines for debugging, including original N50 tags.}
@@ -23,10 +29,31 @@ class OsmCommand(Command):
         {--nonode : Do not identify intersections between lines (time-consuming for large municipalities).}
     """
 
+    def _report_err(self, e: Exception) -> IOSuccess[int]:
+        if isinstance(e, N50Error):
+            self.line_error(text=e.args[0], style="error")
+        else:
+            self.line_error(text=str(e), style="error")
+        return IOSuccess(1)
+
     def handle(self) -> int:
         municipality: str = self.argument("municipality")
         category: str = self.argument("category")
-        return 0
+
+        res = generate_main(
+            cli=self,
+            municipality_query=municipality,
+            data_category=category,
+        )
+
+        print(res)
+
+        if isinstance(res, IOFailure):
+            res = res.lash(self._report_err)
+        else:
+            res = res.map(lambda n: 0)
+
+        return unsafe_perform_io(res.unwrap())
 
 
 class MergeCommand(Command):
@@ -55,7 +82,7 @@ class MergeCommand(Command):
 
 
 application = Application(name="n50", version="0.1.0")
-application.add(OsmCommand())
+application.add(GenerateCommand())
 application.add(MergeCommand())
 
 

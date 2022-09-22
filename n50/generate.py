@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import copy
 import csv
 import json
@@ -10,11 +8,28 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
-from io import BytesIO, TextIOWrapper
+
+from io import BytesIO
+from io import TextIOWrapper
 from typing import Final
 from xml.etree import ElementTree as ET
 
-import utm
+from cleo.commands.command import Command
+from returns.functions import tap
+from returns.io import IOFailure
+from returns.io import IOResult
+from returns.io import IOResultE
+from returns.io import IOSuccess
+from returns.result import Failure
+from returns.result import ResultE
+from returns.result import Success
+
+from n50 import utm
+from n50.cli import Cli
+from n50.exceptions import N50Error
+from n50.municipality_metadata import MunicipalityMetadata
+from n50.municipality_metadata import get_municipality_metadata
+
 
 version = "0.7.2"
 
@@ -2108,7 +2123,20 @@ def save_osm(filename) -> None:
     )
 
 
-def generate_osm(municipality: Municipality):
+def _parse_data_category(data_category: str) -> ResultE[str]:
+    for category in DATA_CATEGORIES:
+        if data_category.lower() in category.lower():
+            return Success(category)
+    try:
+        raise N50Error(
+            f"Data category `{data_category}` not recognized. "
+            f"Expected one of: {', '.join(DATA_CATEGORIES)}"
+        )
+    except N50Error as e:
+        return Failure(e)
+
+
+def generate_osm(municipality: MunicipalityMetadata, data_category: str):
     """Main program"""
     start_time = time.time()
 
@@ -2128,30 +2156,6 @@ def generate_osm(municipality: Municipality):
     no_name = False  # Do not load SSR place names
     no_nve = False  # Do not load NVE lake data
     no_node = False  # Do not merge common nodes at intersections
-
-
-def generate_main(municipality_query: str):
-    [municipality_id, municipality_name] = get_municipality_name(municipality_query)
-    if municipality_id is None:
-        sys.exit(f"Municipality '{municipality_query}' not found\n")
-    else:
-        message(f"Municipality:\t{municipality_id} {municipality_name}\n")
-
-    data_category = None
-    for category in DATA_CATEGORIES:
-        if sys.argv[2].lower() in category.lower():
-            data_category = category
-            message(f"N50 category:\t{data_category}\n")
-            break
-    if not data_category:
-        sys.exit(f"Please provide data category: {', '.join(DATA_CATEGORIES)}\n")
-
-    return generate_osm()
-
-
-if __name__ == "__main__":
-
-    # Get other options
 
     if "-debug" in sys.argv:
         debug = True
@@ -2173,35 +2177,60 @@ if __name__ == "__main__":
     if not turn_stream or not lake_ele:
         message("*** Remember -stream and -ele options before importing.\n")
 
-    output_filename = (
-        f"n50_{municipality_id}_{municipality_name.replace(' ', '_')}_{data_category}"
+        # Get other options
+
+        output_filename = (
+            f"n50_{municipality.number}_{municipality.name.replace(' ', '_')}_{data_category}"
+        )
+
+        # Process data
+
+        if data_category == "BygningerOgAnlegg":
+            load_building_types()
+
+        load_n50_data(municipality.number, municipality.name, data_category)
+
+        if json_output:
+            save_geojson(f"{output_filename}.geojson")
+        else:
+            split_polygons()
+            if data_category == "Arealdekke":
+                if turn_stream:
+                    fix_stream_direction()  # Note: Slow api
+                if not no_nve:
+                    get_nve_lakes()
+                find_islands()  # Note: "Havflate" is removed at the end of this process
+                if not no_name:
+                    get_place_names()
+            match_nodes()
+            save_osm(output_filename + ".osm")
+
+        duration = time.time() - start_time
+        message(
+            "\tTotal run time"
+            f" {timeformat(duration)} ({int(len(features) / duration)} features per"
+            " second)\n\n"
+        )
+
+
+def generate_main(
+    cli: Cli,
+    municipality_query: str,
+    data_category: str,
+) -> IOResultE[object]:
+    municipality_metadata_res = get_municipality_metadata(municipality_query)
+    municipality_metadata_res = municipality_metadata_res.map(
+        tap(lambda mm: cli.info(f"Municipality:\t{mm.number} {mm.name}"))
     )
+    if isinstance(municipality_metadata_res, IOFailure):
+        return municipality_metadata_res
 
-    # Process data
-
-    if data_category == "BygningerOgAnlegg":
-        load_building_types()
-
-    load_n50_data(municipality_id, municipality_name, data_category)
-
-    if json_output:
-        save_geojson(f"{output_filename}.geojson")
-    else:
-        split_polygons()
-        if data_category == "Arealdekke":
-            if turn_stream:
-                fix_stream_direction()  # Note: Slow api
-            if not no_nve:
-                get_nve_lakes()
-            find_islands()  # Note: "Havflate" is removed at the end of this process
-            if not no_name:
-                get_place_names()
-        match_nodes()
-        save_osm(output_filename + ".osm")
-
-    duration = time.time() - start_time
-    message(
-        "\tTotal run time"
-        f" {timeformat(duration)} ({int(len(features) / duration)} features per"
-        " second)\n\n"
+    category_res = _parse_data_category(data_category=data_category).map(
+        tap(lambda c: cli.info(f"N50 category:\t{data_category}"))
     )
+    if isinstance(category_res, Failure):
+        return IOFailure.from_result(category_res)
+
+    return municipality_metadata_res
+
+    return generate_osm()

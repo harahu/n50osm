@@ -9,4 +9,7 @@ def lint(c):
 
 @task
 def package(c):
-    c.run('poetry install && mkdir -p dist && poetry run zipapp -p "/usr/bin/env python3" dist/n50')
+    c.run(
+        'poetry install && mkdir -p dist && poetry run zipapp -p "/usr/bin/env python3"'
+        " dist/n50"
+    )
