@@ -14,7 +14,6 @@ from io import TextIOWrapper
 from typing import Final
 from xml.etree import ElementTree as ET
 
-from cleo.commands.command import Command
 from returns.functions import tap
 from returns.io import IOFailure
 from returns.io import IOResult
@@ -63,6 +62,13 @@ avoid_objects = [  # Object types to exclude from output
     "PresentasjonTekst",  # Stedsnavn
 ]
 
+avoid_tags = [  # N50 properties to exclude from output (unless debug)
+    "oppdateringsdato",
+    "datafangstdato",
+    "målemetode",
+    "nøyaktighet",
+]
+
 auxiliary_objects = [
     "Arealbrukgrense",
     "Dataavgrensning",
@@ -74,13 +80,6 @@ auxiliary_objects = [
     "Innsjøkant",
     "InnsjøkantRegulert",
     "FerskvannTørrfallkant",
-]
-
-avoid_tags = [  # N50 properties to exclude from output (unless debug)
-    "oppdateringsdato",
-    "datafangstdato",
-    "målemetode",
-    "nøyaktighet",
 ]
 
 osm_tags = {
@@ -157,7 +156,7 @@ osm_tags = {
 }
 
 
-def tag_object(feature_type, geometry_type, properties, feature):
+def tag_object(feature_type, geometry_type, properties, feature, data_category):
     """OSM tagging; first special cases"""
     tags = {}
     missing_tags = set()
@@ -282,12 +281,6 @@ def tag_object(feature_type, geometry_type, properties, feature):
         tags["ref"] = "K" + properties["lengde"]
 
     return (tags, missing_tags)
-
-
-def message(output_text) -> None:
-    """Output message"""
-    sys.stdout.write(output_text)
-    sys.stdout.flush()
 
 
 def timeformat(sec) -> str:
@@ -461,7 +454,7 @@ def get_bbox(coordinates, perimeter):
     return [min_node, max_node]
 
 
-def create_point(node, gml_id, note) -> None:
+def create_point(node, gml_id, note, debug) -> None:
     """Create feature with one point"""
     if debug:
         entry = {
@@ -530,7 +523,7 @@ def parse_coordinates(coord_text):
     return coordinates
 
 
-def load_building_types() -> None:
+def load_building_types() -> dict:
     """
     Load conversion CSV table for tagging building types
     Format in CSV: "key=value + key=value + ..."
@@ -547,6 +540,8 @@ def load_building_types() -> None:
     )
     next(building_csv)
 
+    building_tags = {}
+
     for row in building_csv:
         tag_string = (row["building_tag"] + "+" + row["extra_tag"]).strip().strip("+")
 
@@ -561,6 +556,8 @@ def load_building_types() -> None:
             building_tags[row["id"]] = osm_tag
 
     file.close()
+
+    return building_tags
 
 
 def simple_length(coord):
@@ -609,7 +606,7 @@ def get_property(top, ns_app):
     return properties
 
 
-def load_n50_data(municipality_id, municipality_name, data_category) -> None:
+def load_n50_data(municipality_id, municipality_name, data_category, debug) -> None:
     """Load N50 topo data from Kartverket"""
     global gml_id
 
@@ -840,14 +837,14 @@ def load_n50_data(municipality_id, municipality_name, data_category) -> None:
             message("\t\t%i\t%s\n" % (object_count[object_type], object_type))
 
     if missing_tags:
-        message("\tNot tagged: %s\n" % ", ".join(missing_tags.difference("Havflate")))
+        message(f"\tNot tagged: {', '.join(missing_tags.difference('Havflate'))}\n")
     if stream_count > 0:
-        message("\t%i streams\n" % stream_count)
+        message(f"\t{stream_count} streams\n")
 
     message(f"\tSource dates: {source_date[0]} - {source_date[1]}\n")
     message(f"\tUpdate dates: {update_date[0]} - {update_date[1]}\n")
-    message("\t%i feature objects, %i segments\n" % (len(features), len(segments)))
-    message("\tRun time %s\n" % (timeformat(time.time() - lap)))
+    message(f"\t{len(features)} feature objects, {len(segments)} segments\n")
+    message(f"\tRun time {timeformat(time.time() - lap)}\n")
 
 
 def create_border_segments(patch, members, gml_id, match) -> None:
@@ -2145,7 +2142,6 @@ def generate_osm(municipality: MunicipalityMetadata, data_category: str):
     nodes = (
         set()
     )  # Common nodes at intersections, including start/end nodes of segments [lon,lat]
-    building_tags = {}  # Conversion table from building type to osm tag
     object_count = {}  # Count loaded object types
 
     debug = False  # Include debug tags and unused segments
@@ -2186,7 +2182,8 @@ def generate_osm(municipality: MunicipalityMetadata, data_category: str):
         # Process data
 
         if data_category == "BygningerOgAnlegg":
-            load_building_types()
+            building_tags = {}  # Conversion table from building type to osm tag
+            building_tags = load_building_types()
 
         load_n50_data(municipality.number, municipality.name, data_category)
 

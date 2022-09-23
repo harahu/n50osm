@@ -8,6 +8,12 @@ def lint(c):
 
 
 @task
+def format(c):
+    c.run("poetry run isort .")
+    c.run("poetry run black --preview .")
+
+
+@task
 def package(c):
     c.run(
         'poetry install && mkdir -p dist && poetry run zipapp -p "/usr/bin/env python3"'
