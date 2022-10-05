@@ -1,19 +1,20 @@
 import copy
-import csv
 import json
 import math
-import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
 
+from functools import partial
 from io import BytesIO
-from io import TextIOWrapper
+from typing import Any
 from typing import Final
+from typing import Tuple
 from xml.etree import ElementTree as ET
 
+from returns.converters import flatten
 from returns.functions import tap
 from returns.io import IOFailure
 from returns.io import IOResult
@@ -26,19 +27,16 @@ from returns.result import Success
 from n50 import utm
 from n50.cli import Cli
 from n50.exceptions import N50Error
-from n50.municipality_metadata import MunicipalityMetadata
-from n50.municipality_metadata import get_municipality_metadata
+from n50.web_io.building_types import load_building_types
+from n50.web_io.municipality_metadata import MunicipalityMetadata
+from n50.web_io.municipality_metadata import get_municipality_metadata
 
 
-version = "0.7.2"
+VERSION: Final = "0.7.2"
 
-header = {"User-Agent": "nkamapper/n50osm"}
-
-coordinate_decimals = 7
-
-island_size = 100000  # Minimum square meters for place=island vs place=islet
-
-lake_ele_size = 2000  # Minimum square meters for fetching elevation
+COORDINATE_DECIMALS: Final = 7
+ISLAND_SIZE: Final = 100000  # Minimum square meters for place=island vs place=islet
+LAKE_ELE_SIZE: Final = 2000  # Minimum square meters for fetching elevation
 
 DATA_CATEGORIES: Final = (
     "AdministrativeOmrader",
@@ -87,7 +85,8 @@ osm_tags = {
     "Alpinbakke": {"landuse": "winter_sports", "piste:type": "downhill", "area": "yes"},
     "BymessigBebyggelse": {
         "landuse": "retail"
-    },  #'landuse': 'residential', 'residential': 'urban' },
+        # "landuse": "residential", "residential": "urban",
+    },
     "DyrketMark": {"landuse": "farmland"},
     "ElvBekk": {"waterway": "stream"},
     "FerskvannTørrfall": {"waterway": "riverbank", "intermittent": "yes"},
@@ -119,6 +118,7 @@ osm_tags = {
     "Sti": {"highway": "path"},
     # Hoyde
     "Terrengpunkt": {"natural": "hill"},
+    # TODO: Survey point
     "TrigonometriskPunkt": {"natural": "hill"},
     # Restriksjonsomrader
     "Naturvernområde": {"boundary": "protected_area"},
@@ -141,12 +141,16 @@ osm_tags = {
     "Pir": {"man_made": "pier"},
     "Reingjerde": {"barrier": "fence"},
     "Rørgate": {"man_made": "pipeline"},  # Also "tømmerrenne"
-    "Skitrekk": {"aerialway": "drag_lift"},  # Could be other aerialway values
+    "Skitrekk": {
+        # Could be other aerialway values
+        "aerialway": "drag_lift"
+    },
     "Skytebaneinnretning": {"leisure": "pitch", "sport": "shooting"},
     "Tank": {"man_made": "tank"},
     "Taubane": {
+        # Could be other aerial values, e.g. gondola, goods
         "aerialway": "cable_car"
-    },  # Could be other aerial values, e.g. gondola, goods
+    },
     "Tårn": {"man_made": "tower"},  # Any massive or substantial tower
     "Vindkraftverk": {
         "power": "generator",
@@ -156,7 +160,9 @@ osm_tags = {
 }
 
 
-def tag_object(feature_type, geometry_type, properties, feature, data_category):
+def tag_object(
+    feature_type, geometry_type, properties, feature, data_category, building_tags
+):
     """OSM tagging; first special cases"""
     tags = {}
     missing_tags = set()
@@ -414,7 +420,7 @@ def inside_multipolygon(point, multipolygon):
         return None
 
 
-def coordinate_offset(node, distance):
+def coordinate_offset(node, distance) -> Tuple[Any, Any]:
     """
     Calculate new node with given distance offset in meters
     Works over short distances
@@ -424,7 +430,7 @@ def coordinate_offset(node, distance):
     latitude = node[1] + (distance * m)
     longitude = node[0] + (distance * m) / math.cos(math.radians(node[1]))
 
-    return (longitude, latitude)
+    return longitude, latitude
 
 
 def get_bbox(coordinates, perimeter):
@@ -454,7 +460,7 @@ def get_bbox(coordinates, perimeter):
     return [min_node, max_node]
 
 
-def create_point(node, gml_id, note, debug) -> None:
+def create_point(node, gml_id, note, debug, features) -> None:
     """Create feature with one point"""
     if debug:
         entry = {
@@ -471,7 +477,7 @@ def create_point(node, gml_id, note, debug) -> None:
         features.append(entry)
 
 
-def parse_coordinates(coord_text):
+def parse_coordinates(coord_text, json_output):
     """
     Get list of coordinates from GML
     Each point is a tuple of (lon, lat), corresponding to GeoJSON format x,y
@@ -485,7 +491,7 @@ def parse_coordinates(coord_text):
         x = float(split_coord[i])
         y = float(split_coord[i + 1])
         [lat, lon] = utm.UtmToLatLon(x, y, 33, "N")
-        node = (round(lon, coordinate_decimals), round(lat, coordinate_decimals))
+        node = (round(lon, COORDINATE_DECIMALS), round(lat, COORDINATE_DECIMALS))
         parse_count += 1
         if not coordinates or node != coordinates[-1] or json_output:
             coordinates.append(node)
@@ -493,7 +499,7 @@ def parse_coordinates(coord_text):
             # 			message ("\t*** DELETED DUPLICATE NODE: %s %s\n" % (node, gml_id))
             create_point(node, gml_id, "deleted duplicate")
 
-    # Remove single outlayer node
+    # Remove single outlier node
 
     if not json_output:
         i = 0
@@ -521,43 +527,6 @@ def parse_coordinates(coord_text):
         message("\t*** SHORT WAY %s\n" % gml_id)
 
     return coordinates
-
-
-def load_building_types() -> dict:
-    """
-    Load conversion CSV table for tagging building types
-    Format in CSV: "key=value + key=value + ..."
-    """
-    # 	file = open("building_types.csv")
-    url = "https://raw.githubusercontent.com/NKAmapper/building2osm/main/building_types.csv"
-    request = urllib.request.Request(url, headers=header)
-    file = urllib.request.urlopen(request)
-
-    building_csv = csv.DictReader(
-        TextIOWrapper(file, "utf-8"),
-        fieldnames=["id", "name", "building_tag", "extra_tag"],
-        delimiter=";",
-    )
-    next(building_csv)
-
-    building_tags = {}
-
-    for row in building_csv:
-        tag_string = (row["building_tag"] + "+" + row["extra_tag"]).strip().strip("+")
-
-        if tag_string:
-            osm_tag = {}
-            tag_list = tag_string.replace(" ", "").split("+")
-
-            for tag_part in tag_list:
-                tag_split = tag_part.split("=")
-                osm_tag[tag_split[0]] = tag_split[1]
-
-            building_tags[row["id"]] = osm_tag
-
-    file.close()
-
-    return building_tags
 
 
 def simple_length(coord):
@@ -606,7 +575,11 @@ def get_property(top, ns_app):
     return properties
 
 
-def load_n50_data(municipality_id, municipality_name, data_category, debug) -> None:
+def load_n50_data(
+    municipality: MunicipalityMetadata,
+    data_category: str,
+    debug: bool,
+) -> None:
     """Load N50 topo data from Kartverket"""
     global gml_id
 
@@ -621,9 +594,8 @@ def load_n50_data(municipality_id, municipality_name, data_category, debug) -> N
 
     # Load latest N50 file for municipality from Kartverket
 
-    filename = "Basisdata_{}_{}_25833_N50Kartdata_GML".format(
-        municipality_id,
-        municipality_name,
+    filename = (
+        f"Basisdata_{municipality.number}_{municipality.name}_25833_N50Kartdata_GML"
     )
     filename = (
         filename.replace("Æ", "E")
@@ -634,12 +606,10 @@ def load_n50_data(municipality_id, municipality_name, data_category, debug) -> N
         .replace("å", "a")
         .replace(" ", "_")
     )
-    message("\tLoading file '%s'\n" % filename)
+    message(f"\tLoading file '{filename}'\n")
 
     request = urllib.request.Request(
-        "https://nedlasting.geonorge.no/geonorge/Basisdata/N50Kartdata/GML/"
-        + filename
-        + ".zip",
+        f"https://nedlasting.geonorge.no/geonorge/Basisdata/N50Kartdata/GML/{filename}.zip",
         headers=header,
     )
     file_in = urllib.request.urlopen(request)
@@ -849,7 +819,7 @@ def load_n50_data(municipality_id, municipality_name, data_category, debug) -> N
 
 def create_border_segments(patch, members, gml_id, match) -> None:
     """Create missing KantUtsnitt segments to get complete polygons"""
-    # First create list of existing conncetions between coordinates i and i+1 of patch
+    # First create list of existing connections between coordinates i and i+1 of patch
 
     connection = []
     for i in range(len(patch) - 1):
@@ -1093,7 +1063,7 @@ def find_islands() -> None:
 
                 area = polygon_area(feature["coordinates"][i])
 
-                if abs(area) > island_size:
+                if abs(area) > ISLAND_SIZE:
                     island_type = "island"
                 else:
                     island_type = "islet"
@@ -1109,7 +1079,7 @@ def find_islands() -> None:
                     segment["extras"]["areal"] = str(int(abs(area)))
 
                 else:
-                    # Serach for already existing relation
+                    # Search for already existing relation
 
                     found = False
                     for feature2 in candidates:
@@ -1220,7 +1190,7 @@ def find_islands() -> None:
             if area < 0:
                 continue
 
-            if abs(area) > island_size:
+            if abs(area) > ISLAND_SIZE:
                 island_type = "island"
             else:
                 island_type = "islet"
@@ -1338,7 +1308,7 @@ def match_nodes() -> None:
                                 else:
                                     lon, lat = node
                                     offset = 10 ** (
-                                        -coordinate_decimals + 1
+                                        -COORDINATE_DECIMALS + 1
                                     )  # Last lat/lon decimal digit
                                     feature["coordinates"][index1] = (
                                         lon + 4 * offset,
@@ -1419,7 +1389,7 @@ def get_elevation_old(node):
 
         except urllib.error.HTTPError as e:
             if retry < max_retry:
-                message("\tRetry #%i " % retry)
+                message(f"\tRetry #{retry} ")
                 time.sleep(2 ** (retry - 1))  # First retry after 1 second
                 retry_count += 1
             else:
@@ -1450,7 +1420,7 @@ def get_elevation_old(node):
     if math.isnan(ele):
         ele = None
     if ele is None:
-        message(" *** NO ELEVATION: %s \n" % str(node))
+        message(f" *** NO ELEVATION: {str(node)} \n")
 
     elevations[node] = ele  # Store for possible identical request later
     ele_count += 1
@@ -1490,7 +1460,7 @@ def get_elevation(node):
     ele_count += 1
 
     if ele is None:
-        message(" *** NO ELEVATION: %s \n" % str(result))
+        message(f" *** NO ELEVATION: {str(result)} \n")
     # 		ele = 0.0
 
     return ele
@@ -1501,7 +1471,7 @@ def fix_stream_direction() -> None:
     global elevations, ele_count, retry_count
 
     elevations = {}  # Already fetched elevations from api
-    ele_count = 0  # Numbr of api calls during program execution
+    ele_count = 0  # Number of api calls during program execution
     retry_count = 0  # Number of retry to api
     max_error = 1.0  # Meters of elevation difference
 
@@ -1671,7 +1641,7 @@ def get_ssr_name(feature, name_categories):
         return None
 
 
-def get_category_place_names(n50_categories, ssr_categories) -> None:
+def get_category_place_names(n50_categories, ssr_categories, features) -> None:
     """Get place names for a category"""
     for feature in features:
         if feature["object"] in n50_categories:
@@ -1778,7 +1748,7 @@ def get_place_names() -> None:
             if (
                 lake_ele
                 and "ele" not in feature["tags"]
-                and (lake_node or area >= lake_ele_size)
+                and (lake_node or area >= LAKE_ELE_SIZE)
             ):
                 # Check that name coordinate is not on lake's island
                 if lake_node:
@@ -1850,7 +1820,6 @@ def get_nve_lakes() -> None:
     lakes = {}
 
     # Paging results (default 1000 lakes)
-
     while more_lakes:
         # 		Alternative url:
         # 		url = "https://gis3.nve.no/map/rest/services/Innsjodatabase2/MapServer/find?" + \
@@ -1863,8 +1832,8 @@ def get_nve_lakes() -> None:
 
         url = (
             "https://nve.geodataonline.no/arcgis/rest/services/Innsjodatabase2/MapServer/5/query?"
-            + "where=kommNr%%3D%%27%s%%27&outFields=vatnLnr%%2Cnavn%%2Choyde%%2Careal_km2%%2CmagasinNr&returnGeometry=false&resultOffset=%i&resultRecordCount=1000&f=json"
-            % (municipality_id, nve_lake_count)
+            f"where=kommNr%%3D%%27{municipality_id}%%27&outFields=vatnLnr%%2Cnavn%%2Choyde%%2Careal_km2%%2CmagasinNr"
+            f"&returnGeometry=false&resultOffset={nve_lake_count}&resultRecordCount=1000&f=json"
         )
 
         request = urllib.request.Request(url, headers=header)
@@ -1888,7 +1857,6 @@ def get_nve_lakes() -> None:
             more_lakes = False
 
     # Update lake info
-
     for feature in features:
         if "ref:nve:vann" in feature["tags"]:
             ref = feature["tags"]["ref:nve:vann"]
@@ -1909,14 +1877,13 @@ def get_nve_lakes() -> None:
             n50_lake_count += 1
 
     message(
-        "\t%i N50 lakes matched against %i NVE lakes\n"
-        % (n50_lake_count, nve_lake_count)
+        f"\t{n50_lake_count} N50 lakes matched against {nve_lake_count} NVE lakes\n"
     )
 
 
-def save_geojson(filename) -> None:
+def save_geojson(filename: str, features, segments) -> None:
     """Save geojson file for reviewing raw input data from GML file"""
-    message("Save to '%s' file...\n" % filename)
+    message(f"Save to '{filename}' file...\n")
 
     json_features = {"type": "FeatureCollection", "features": []}
 
@@ -1941,7 +1908,7 @@ def save_geojson(filename) -> None:
     json.dump(json_features, file, indent=2)
     file.close()
 
-    message("\t%i features saved\n" % len(features))
+    message(f"\t{len(features)} features saved\n")
 
 
 def indent_tree(elem, level=0) -> None:
@@ -1961,9 +1928,9 @@ def indent_tree(elem, level=0) -> None:
             elem.tail = i
 
 
-def save_osm(filename) -> None:
+def save_osm(filename: str, features, segments) -> None:
     """Save osm file"""
-    message("Save to '%s' file...\n" % filename)
+    message(f"Save to '{filename}' file...\n")
 
     osm_node_ids = {}  # Will contain osm_id of each common node
     relation_count = 0
@@ -1971,7 +1938,7 @@ def save_osm(filename) -> None:
     node_count = 0
 
     osm_root = ET.Element(
-        "osm", version="0.6", generator="n50osm v" + version, upload="false"
+        "osm", version="0.6", generator="n50osm v" + VERSION, upload="false"
     )
     osm_id = -1000
 
@@ -2098,7 +2065,7 @@ def save_osm(filename) -> None:
                 osm_feature.append(osm_tag)
 
         else:
-            message("\t*** UNKNOWN GEOMETRY: %s\n" % feature["type"])
+            message(f"\t*** UNKNOWN GEOMETRY: {feature['type']}\n")
 
         for key, value in iter(feature["tags"].items()):
             osm_tag = ET.Element("tag", k=key, v=value)
@@ -2115,8 +2082,7 @@ def save_osm(filename) -> None:
     osm_tree.write(filename, encoding="utf-8", method="xml", xml_declaration=True)
 
     message(
-        "\t%i relations, %i ways, %i nodes saved\n"
-        % (relation_count, way_count, node_count)
+        f"\t{relation_count} relations, {way_count} ways, {node_count} nodes saved\n"
     )
 
 
@@ -2133,7 +2099,18 @@ def _parse_data_category(data_category: str) -> ResultE[str]:
         return Failure(e)
 
 
-def generate_osm(municipality: MunicipalityMetadata, data_category: str):
+def generate_osm(
+    municipality: MunicipalityMetadata,
+    data_category: str,
+    debug: bool,  # Include debug tags and unused segments
+    n50_tags: bool,  # Include property tags from N50 in output
+    json_output: bool,  # Output complete and unprocessed geometry in geojson format
+    turn_stream: bool,  # Load elevation data to check direction of streams
+    lake_ele: bool,  # Load elevation for lakes
+    no_name: bool,  # Do not load SSR place names
+    no_nve: bool,  # Do not load NVE lake data
+    no_node: bool,  # Do not merge common nodes at intersections
+) -> IOResultE[object]:
     """Main program"""
     start_time = time.time()
 
@@ -2144,37 +2121,10 @@ def generate_osm(municipality: MunicipalityMetadata, data_category: str):
     )  # Common nodes at intersections, including start/end nodes of segments [lon,lat]
     object_count = {}  # Count loaded object types
 
-    debug = False  # Include debug tags and unused segments
-    n50_tags = False  # Include property tags from N50 in output
-    json_output = False  # Output complete and unprocessed geometry in geojson format
-    turn_stream = False  # Load elevation data to check direction of streams
-    lake_ele = False  # Load elevation for lakes
-    no_name = False  # Do not load SSR place names
-    no_nve = False  # Do not load NVE lake data
-    no_node = False  # Do not merge common nodes at intersections
-
-    if "-debug" in sys.argv:
-        debug = True
-    if "-tag" in sys.argv or "-tags" in sys.argv:
-        n50_tags = True
-    if "-geojson" in sys.argv or "-json" in sys.argv:
-        json_output = True
-    if "-stream" in sys.argv or "-bekk" in sys.argv:
-        turn_stream = True
-    if "-ele" in sys.argv or "-høyde" in sys.argv:
-        lake_ele = True
-    if "-noname" in sys.argv:
-        no_name = True
-    if "-nonve" in sys.argv:
-        no_nve = True
-    if "-nonode" in sys.argv:
-        no_node = True
-
     if not turn_stream or not lake_ele:
         message("*** Remember -stream and -ele options before importing.\n")
 
         # Get other options
-
         output_filename = (
             f"n50_{municipality.number}_{municipality.name.replace(' ', '_')}_{data_category}"
         )
@@ -2185,7 +2135,9 @@ def generate_osm(municipality: MunicipalityMetadata, data_category: str):
             building_tags = {}  # Conversion table from building type to osm tag
             building_tags = load_building_types()
 
-        load_n50_data(municipality.number, municipality.name, data_category)
+        load_n50_data(
+            municipality=municipality, data_category=data_category, debug=debug
+        )
 
         if json_output:
             save_geojson(f"{output_filename}.geojson")
@@ -2200,7 +2152,7 @@ def generate_osm(municipality: MunicipalityMetadata, data_category: str):
                 if not no_name:
                     get_place_names()
             match_nodes()
-            save_osm(output_filename + ".osm")
+            save_osm(f"{output_filename}.osm")
 
         duration = time.time() - start_time
         message(
@@ -2208,26 +2160,49 @@ def generate_osm(municipality: MunicipalityMetadata, data_category: str):
             f" {timeformat(duration)} ({int(len(features) / duration)} features per"
             " second)\n\n"
         )
+        return IOSuccess(municipality)
 
 
 def generate_main(
     cli: Cli,
     municipality_query: str,
     data_category: str,
+    debug: bool,  # Include debug tags and unused segments
+    n50_tags: bool,  # Include property tags from N50 in output
+    json_output: bool,  # Output complete and unprocessed geometry in geojson format
+    turn_stream: bool,  # Load elevation data to check direction of streams
+    lake_ele: bool,  # Load elevation for lakes
+    no_name: bool,  # Do not load SSR place names
+    no_nve: bool,  # Do not load NVE lake data
+    no_node: bool,  # Do not merge common nodes at intersections
 ) -> IOResultE[object]:
-    municipality_metadata_res = get_municipality_metadata(municipality_query)
-    municipality_metadata_res = municipality_metadata_res.map(
+    gen_fn = partial(
+        generate_osm,
+        debug=debug,
+        n50_tags=n50_tags,
+        json_output=json_output,
+        turn_stream=turn_stream,
+        lake_ele=lake_ele,
+        no_name=no_name,
+        no_nve=no_nve,
+        no_node=no_node,
+    )
+    gen_fn_res = (
+        _parse_data_category(data_category=data_category)
+        .map(
+            # Print data category, if recognized
+            tap(lambda c: cli.info(f"N50 category:\t{data_category}"))
+        )
+        .map(lambda c: partial(gen_fn, data_category=c))
+    )
+
+    if isinstance(gen_fn_res, Failure):
+        return IOFailure.from_result(gen_fn_res)
+
+    municipality_metadata_res = get_municipality_metadata(municipality_query).map(
+        # Print municipality, if successfully identified
         tap(lambda mm: cli.info(f"Municipality:\t{mm.number} {mm.name}"))
     )
-    if isinstance(municipality_metadata_res, IOFailure):
-        return municipality_metadata_res
 
-    category_res = _parse_data_category(data_category=data_category).map(
-        tap(lambda c: cli.info(f"N50 category:\t{data_category}"))
-    )
-    if isinstance(category_res, Failure):
-        return IOFailure.from_result(category_res)
-
-    return municipality_metadata_res
-
-    return generate_osm()
+    ret = flatten(municipality_metadata_res.apply(IOResult.from_result(gen_fn_res)))
+    return ret

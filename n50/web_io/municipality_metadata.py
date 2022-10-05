@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import urllib.parse
 
+from functools import partial
 from typing import Any
 from typing import Final
 
@@ -15,9 +18,8 @@ from returns.result import ResultE
 from returns.result import Success
 
 from n50.exceptions import N50Error
+from n50.web_io.common import _safe_get
 
-
-HEADER = {"User-Agent": "nkamapper/n50osm"}
 
 MUNICIPALITIES_KEY: Final = "kommuner"
 MUNICIPALITY_NUMBER_KEY: Final = "kommunenummer"
@@ -26,6 +28,14 @@ MUNICIPALITY_NAME_KEY: Final = "kommunenavnNorsk"
 
 @attrs.frozen(auto_attribs=True, slots=True)
 class MunicipalityMetadata:
+    """Uniquely identifying information for a municipality."""
+
+    # We also have access to, but choose not to make use of:
+    # - County name
+    # - County number
+    # - Alternative names
+    # - Point in area
+    # - Whether the municipality is part of the sami governance area
     name: str = attrs.field(validator=attrs.validators.instance_of(str))
     number: str = attrs.field(validator=attrs.validators.instance_of(str))
 
@@ -41,17 +51,17 @@ class MunicipalityMetadata:
         return f"{self.number} {self.name}"
 
 
-def _get_municipality_response_from_number(number: str) -> requests.Response:
-    url = f"https://ws.geonorge.no/kommuneinfo/v1/kommuner/{number}"
-    return requests.get(url, headers=HEADER)
+def _get_municipality_response_from_number(number: str) -> IOResultE[requests.Response]:
+    return _safe_get(url=f"https://ws.geonorge.no/kommuneinfo/v1/kommuner/{number}")
 
 
-def _get_municipality_response_from_name(name: str) -> requests.Response:
-    url = f"https://ws.geonorge.no/kommuneinfo/v1/sok?knavn={urllib.parse.quote(name)}"
-    return requests.get(url, headers=HEADER)
+def _get_municipality_response_from_name(name: str) -> IOResultE[requests.Response]:
+    return _safe_get(
+        url=f"https://ws.geonorge.no/kommuneinfo/v1/sok?knavn={urllib.parse.quote(name)}"
+    )
 
 
-def _get_municipality_response(query: str) -> requests.Response:
+def _get_municipality_response(query: str) -> IOResultE[requests.Response]:
     return (
         _get_municipality_response_from_number(number=query)
         if query.isdecimal()
@@ -59,8 +69,7 @@ def _get_municipality_response(query: str) -> requests.Response:
     )
 
 
-def _get_municipality_json(query: str) -> IOResultE[requests.Response]:
-    response = _get_municipality_response(query=query)
+def _parse_response(response: requests.Response, query: str) -> IOResultE[Any]:
     try:
         response.raise_for_status()
     except HTTPError as http_e:
@@ -94,6 +103,11 @@ def _parse_municipalities_json(
         return Success(municipalities[0])
     else:
         raise AssertionError("This shouldn't happen")
+
+
+def _get_municipality_json(query: str) -> IOResultE[requests.Response]:
+    response_res = _get_municipality_response(query=query)
+    return response_res.bind(partial(_parse_response, query=query))
 
 
 def get_municipality_metadata(query: str) -> IOResultE[MunicipalityMetadata]:

@@ -44,6 +44,14 @@ class GenerateCommand(Command):
             cli=self,
             municipality_query=municipality,
             data_category=category,
+            debug=self.option("debug"),
+            n50_tags=self.option("tags"),
+            json_output=self.option("json"),
+            turn_stream=self.option("stream"),
+            lake_ele=self.option("ele"),
+            no_name=self.option("noname"),
+            no_nve=self.option("nonve"),
+            no_node=self.option("nonode"),
         )
 
         print(res)
